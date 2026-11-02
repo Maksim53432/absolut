@@ -1,13 +1,13 @@
-import sys
 import os
 import time
 import ctypes
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 import cv2
 from PIL import Image, ImageTk
 
-# Импортируем наши модули
+import customtkinter as ctk
+
 from config import cfg, save_cfg, ITEMS, RU
 import vision
 import strategy
@@ -21,75 +21,66 @@ except Exception:
 def select_region_ui(root):
     root.withdraw()
     time.sleep(0.3)
-    shot = vision.grab_screen()
-    mon = vision.get_monitor()
-    img = Image.fromarray(cv2.cvtColor(shot, cv2.COLOR_BGRA2RGB))
+    try:
+        shot = vision.grab_screen()
+        mon = vision.get_monitor()
+        img = Image.fromarray(cv2.cvtColor(shot, cv2.COLOR_BGRA2RGB))
 
-    top = tk.Toplevel(root)
-    top.attributes("-fullscreen", True, "-topmost", True)
-    cv = tk.Canvas(top, cursor="cross", highlightthickness=0)
-    cv.pack(fill="both", expand=True)
-    top.update_idletasks()
+        top = tk.Toplevel(root)
+        top.attributes("-fullscreen", True, "-topmost", True)
+        cv = tk.Canvas(top, cursor="cross", highlightthickness=0)
+        cv.pack(fill="both", expand=True)
+        top.update_idletasks()
 
-    sw, sh = top.winfo_screenwidth(), top.winfo_screenheight()
-    photo = ImageTk.PhotoImage(img.resize((sw, sh)))
-    cv.create_image(0, 0, image=photo, anchor="nw")
-    cv.image = photo
-    cv.create_text(sw // 2, 30, fill="#ff3333", font=("Segoe UI", 18, "bold"),
-                   text="Выделите область мышкой (Esc — отмена)")
-    res = {}
+        sw, sh = top.winfo_screenwidth(), top.winfo_screenheight()
+        photo = ImageTk.PhotoImage(img.resize((sw, sh)))
+        cv.create_image(0, 0, image=photo, anchor="nw")
+        cv.image = photo
+        cv.create_text(sw // 2, 30, fill="#ff3333", font=("Segoe UI", 18, "bold"),
+                       text="Выделите область мышкой (Esc — отмена)")
+        res = {}
 
-    def down(e):
-        res["x"], res["y"] = e.x, e.y
-        res["r"] = cv.create_rectangle(e.x, e.y, e.x, e.y, outline="#ff3333", width=2)
+        def down(e):
+            res["x"], res["y"] = e.x, e.y
+            res["r"] = cv.create_rectangle(e.x, e.y, e.x, e.y, outline="#ff3333", width=2)
 
-    def move(e):
-        if "r" in res:
-            cv.coords(res["r"], res["x"], res["y"], e.x, e.y)
+        def move(e):
+            if "r" in res:
+                cv.coords(res["r"], res["x"], res["y"], e.x, e.y)
 
-    def up(e):
-        if "r" not in res:
-            return
-        k = img.width / sw
-        x1, x2 = sorted((res["x"], e.x))
-        y1, y2 = sorted((res["y"], e.y))
-        x, y, w, h = int(x1 * k), int(y1 * k), int((x2 - x1) * k), int((y2 - y1) * k)
-        if w > 3 and h > 3:
-            res["roi"] = (mon["left"] + x, mon["top"] + y, w, h)
-            res["crop"] = cv2.cvtColor(shot[y:y + h, x:x + w], cv2.COLOR_BGRA2BGR)
-        top.destroy()
+        def up(e):
+            if "r" not in res:
+                return
+            k = img.width / sw
+            x1, x2 = sorted((res["x"], e.x))
+            y1, y2 = sorted((res["y"], e.y))
+            x, y, w, h = int(x1 * k), int(y1 * k), int((x2 - x1) * k), int((y2 - y1) * k)
+            if w > 3 and h > 3:
+                res["roi"] = (mon["left"] + x, mon["top"] + y, w, h)
+                res["crop"] = cv2.cvtColor(shot[y:y + h, x:x + w], cv2.COLOR_BGRA2BGR)
+            top.destroy()
 
-    cv.bind("<ButtonPress-1>", down)
-    cv.bind("<B1-Motion>", move)
-    cv.bind("<ButtonRelease-1>", up)
-    top.bind("<Escape>", lambda e: top.destroy())
-    root.wait_window(top)
-    root.deiconify()
-    return (res["roi"], res["crop"]) if "roi" in res else None
+        cv.bind("<ButtonPress-1>", down)
+        cv.bind("<B1-Motion>", move)
+        cv.bind("<ButtonRelease-1>", up)
+        top.bind("<Escape>", lambda e: top.destroy())
+        root.wait_window(top)
+        return (res["roi"], res["crop"]) if "roi" in res else None
+    finally:
+        root.deiconify()
 
 
-class App:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("🤖 BUCKSHOT AI")
-        self.root.attributes("-topmost", True, "-alpha", 0.96)
-        self.root.resizable(False, False)
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("🤖 BUCKSHOT AI v2")
+        self.geometry("900x720")
+        self.minsize(820, 640)
+        self.attributes("-topmost", True, "-alpha", 0.97)
 
-        # Настройка Темной Темы
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.style.configure(".", background="#1e1e24", foreground="#f5f5f7", font=("Segoe UI", 10))
-        self.style.configure("TLabel", background="#1e1e24", foreground="#f5f5f7")
-        self.style.configure("TLabelframe", background="#1e1e24", foreground="#a1a1aa", bordercolor="#33333c")
-        self.style.configure("TLabelframe.Label", background="#1e1e24", foreground="#38bdf8",
-                             font=("Segoe UI", 10, "bold"))
-        self.style.configure("TButton", background="#2d2d38", foreground="#f5f5f7", borderwidth=0, focuscolor="none")
-        self.style.map("TButton", background=[("active", "#3b3b4a")])
-        self.style.configure("Action.TButton", background="#0284c7", foreground="white",
-                             font=("Segoe UI", 10, "bold"))
-        self.style.map("Action.TButton", background=[("active", "#0369a1")])
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
 
-        # Переменные интерфейса
         self.live, self.blank = tk.IntVar(value=0), tk.IntVar(value=0)
         self.me, self.maxhp = tk.IntVar(value=3), tk.IntVar(value=4)
         self.opp_hp = [tk.IntVar(value=3) for _ in range(3)]
@@ -115,156 +106,225 @@ class App:
 
         self.build_ui()
         self.refresh()
-        self.root.after(700, self.tick)
+        self.after(700, self.tick)
 
+    def _cal_alive(self):
+        return self.cal is not None and self.cal.winfo_exists()
+
+    def _cal_hide(self):
+        if self._cal_alive():
+            self.cal.withdraw()
+
+    def _cal_show(self):
+        if self._cal_alive():
+            self.cal.deiconify()
+
+    # ---------- UI ----------
     def build_ui(self):
-        pad = dict(padx=5, pady=3)
+        top = ctk.CTkFrame(self, height=42)
+        top.pack(fill="x", padx=10, pady=(10, 0))
+        ctk.CTkCheckBox(top, text="⚡ Авто-скан", variable=self.auto).pack(side="left", padx=8, pady=6)
+        ctk.CTkCheckBox(top, text="Следить за патронами", variable=self.track_shells).pack(side="left", padx=8)
+        ctk.CTkButton(top, text="⚙ Настройки ROI", width=140,
+                      command=self.open_cal, fg_color="#7c3aed").pack(side="right", padx=8, pady=6)
 
-        bar = ttk.Frame(self.root, padding=6, style="TFrame")
-        bar.pack(fill="x")
-        ttk.Checkbutton(bar, text="⚡ Авто-скан", variable=self.auto).pack(side="left", padx=5)
-        ttk.Checkbutton(bar, text="Следить за патронами", variable=self.track_shells).pack(side="left", padx=5)
-        ttk.Button(bar, text="⚙ Настройки ROI", command=self.open_cal).pack(side="right", padx=5)
+        ctk.CTkLabel(self, textvariable=self.status, text_color="#9ca3af",
+                     font=ctk.CTkFont(size=11, slant="italic"), anchor="w").pack(fill="x", padx=14)
 
-        lbl_status = tk.Label(self.root, textvariable=self.status, font=("Segoe UI", 9, "italic"),
-                              bg="#1e1e24", fg="#71717a")
-        lbl_status.pack(anchor="w", padx=12)
+        self.advice = ctk.CTkLabel(self, text="", text_color="#38bdf8",
+                                   font=ctk.CTkFont(size=15, weight="bold"),
+                                   wraplength=860, justify="left", anchor="w",
+                                   fg_color="#111827", corner_radius=10,
+                                   height=80)
+        self.advice.pack(fill="x", padx=14, pady=10)
 
-        m = ttk.Frame(self.root, padding=10)
-        m.pack()
+        self.tabs = ctk.CTkTabview(self, anchor="nw")
+        self.tabs.pack(fill="both", expand=True, padx=14, pady=(0, 10))
+        self.tab_main = self.tabs.add("Стол")
+        self.tab_opp = self.tabs.add("Оппоненты")
+        self.tab_items = self.tabs.add("Инвентарь")
+        self.tab_actions = self.tabs.add("Действия")
 
-        self.advice = tk.Label(m, text="", font=("Segoe UI", 13, "bold"), fg="#38bdf8", bg="#151518",
-                               wraplength=440, justify="left", height=4, anchor="w", padx=10, relief="solid", bd=1)
-        self.advice.grid(row=0, column=0, columnspan=4, sticky="we", pady=(0, 10))
+        self._build_main_tab()
+        self._build_opp_tab()
+        self._build_items_tab()
+        self._build_actions_tab()
 
-        ttk.Label(m, text="Режим стола:").grid(row=1, column=0, sticky="w", **pad)
-        cb = ttk.Combobox(m, textvariable=self.mode, values=["1 на 1", "4 игрока"], state="readonly", width=10)
-        cb.grid(row=1, column=1, sticky="w", **pad)
-        cb.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+    def _spin(self, parent, var, frm=0, to=8, width=60, command=None):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        e = ctk.CTkEntry(f, textvariable=var, width=width, justify="center")
+        e.pack(side="left")
 
-        ttk.Label(m, text="Макс HP:").grid(row=1, column=2, sticky="w", **pad)
-        ttk.Spinbox(m, from_=1, to=6, width=5, textvariable=self.maxhp,
-                    command=self.refresh).grid(row=1, column=3, sticky="w", **pad)
+        def _get():
+            try:
+                return int(var.get())
+            except (tk.TclError, ValueError):
+                return frm
 
-        ttk.Label(m, text="🔴 Боевых:").grid(row=2, column=0, sticky="w", **pad)
-        ttk.Spinbox(m, from_=0, to=8, width=5, textvariable=self.live,
-                    command=self.refresh).grid(row=2, column=1, sticky="w", **pad)
+        def up():
+            var.set(min(to, _get() + 1))
+            if command:
+                command()
 
-        ttk.Label(m, text="⚪ Холостых:").grid(row=2, column=2, sticky="w", **pad)
-        ttk.Spinbox(m, from_=0, to=8, width=5, textvariable=self.blank,
-                    command=self.refresh).grid(row=2, column=3, sticky="w", **pad)
+        def down():
+            var.set(max(frm, _get() - 1))
+            if command:
+                command()
 
-        ttk.Label(m, text="Мои HP:").grid(row=3, column=0, sticky="w", **pad)
-        ttk.Spinbox(m, from_=0, to=6, width=5, textvariable=self.me,
-                    command=self.refresh).grid(row=3, column=1, sticky="w", **pad)
-        ttk.Checkbutton(m, text="Ствол отпилен", variable=self.sawed,
-                        command=self.refresh).grid(row=3, column=2, columnspan=2, sticky="w", **pad)
+        ctk.CTkButton(f, text="▲", width=24, height=24, command=up,
+                      fg_color="#374151", hover_color="#4b5563").pack(side="left", padx=(2, 0))
+        ctk.CTkButton(f, text="▼", width=24, height=24, command=down,
+                      fg_color="#374151", hover_color="#4b5563").pack(side="left", padx=(2, 0))
+        return f
 
-        pf = ttk.LabelFrame(m, text=" Мониторинг оппонентов ", padding=6)
-        pf.grid(row=4, column=0, columnspan=4, sticky="we", pady=8)
-        for c, t in enumerate(("Игрок", "HP", "Итемы", "Связан")):
-            ttk.Label(pf, text=t, foreground="#71717a",
-                      font=("Segoe UI", 9, "bold")).grid(row=0, column=c, padx=6)
+    def _build_main_tab(self):
+        p = self.tab_main
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", pady=4)
+        ctk.CTkLabel(row, text="Режим стола:", width=110, anchor="w").pack(side="left")
+        ctk.CTkOptionMenu(row, values=["1 на 1", "4 игрока"], variable=self.mode,
+                          width=140, command=lambda _: self.refresh()).pack(side="left", padx=6)
+        ctk.CTkLabel(row, text="Макс HP:", width=90, anchor="w").pack(side="left", padx=(20, 0))
+        self._spin(row, self.maxhp, 1, 6, command=self.refresh).pack(side="left", padx=4)
+
+        row2 = ctk.CTkFrame(p, fg_color="transparent")
+        row2.pack(fill="x", pady=4)
+        ctk.CTkLabel(row2, text="🔴 Боевых:", width=110, anchor="w").pack(side="left")
+        self._spin(row2, self.live, 0, 8, command=self.refresh).pack(side="left", padx=4)
+        ctk.CTkLabel(row2, text="⚪ Холостых:", width=110, anchor="w").pack(side="left", padx=(20, 0))
+        self._spin(row2, self.blank, 0, 8, command=self.refresh).pack(side="left", padx=4)
+
+        row3 = ctk.CTkFrame(p, fg_color="transparent")
+        row3.pack(fill="x", pady=4)
+        ctk.CTkLabel(row3, text="Мои HP:", width=110, anchor="w").pack(side="left")
+        self._spin(row3, self.me, 0, 6, command=self.refresh).pack(side="left", padx=4)
+        ctk.CTkCheckBox(row3, text="Ствол отпилен", variable=self.sawed,
+                        command=self.refresh).pack(side="left", padx=20)
+
+        btn = ctk.CTkFrame(p, fg_color="transparent")
+        btn.pack(fill="x", pady=(16, 4))
+        ctk.CTkButton(btn, text="📷 Скан патронов", command=self.read_shells,
+                      width=200, height=40, fg_color="#2563eb").pack(side="left", expand=True, padx=4)
+        ctk.CTkButton(btn, text="📷 Скан всего стола", command=self.read_all,
+                      width=200, height=40, fg_color="#2563eb").pack(side="right", expand=True, padx=4)
+
+        ctk.CTkButton(p, text="🔄 Сброс раунда", command=self.reset,
+                      fg_color="#dc2626", hover_color="#b91c1c", height=36).pack(fill="x", pady=(20, 4))
+
+    def _build_opp_tab(self):
+        p = self.tab_opp
+        header = ctk.CTkFrame(p, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 6))
+        for text, w in [("Игрок", 100), ("HP", 90), ("Итемы", 90), ("Связан", 70)]:
+            ctk.CTkLabel(header, text=text, width=w, anchor="w",
+                         font=ctk.CTkFont(weight="bold"), text_color="#9ca3af").pack(side="left", padx=4)
+
         for i in range(3):
-            ttk.Label(pf, text=f"Игрок {i + 2}").grid(row=i + 1, column=0, padx=6, pady=2)
-            ttk.Spinbox(pf, from_=0, to=6, width=4, textvariable=self.opp_hp[i],
-                        command=self.refresh).grid(row=i + 1, column=1, padx=2)
-            ttk.Spinbox(pf, from_=0, to=12, width=4, textvariable=self.opp_n[i],
-                        command=self.refresh).grid(row=i + 1, column=2, padx=2)
-            ttk.Checkbutton(pf, variable=self.cuffed[i],
-                            command=self.refresh).grid(row=i + 1, column=3, padx=10)
+            row = ctk.CTkFrame(p, fg_color="transparent")
+            row.pack(fill="x", pady=3)
+            ctk.CTkLabel(row, text=f"Игрок {i + 2}", width=100, anchor="w").pack(side="left")
+            self._spin(row, self.opp_hp[i], 0, 6, command=self.refresh).pack(side="left", padx=4)
+            self._spin(row, self.opp_n[i], 0, 12, command=self.refresh).pack(side="left", padx=4)
+            ctk.CTkCheckBox(row, text="", variable=self.cuffed[i],
+                            command=self.refresh, width=24).pack(side="left", padx=20)
 
-        ttk.Label(pf, text="Приоритет цели:").grid(row=4, column=0, columnspan=2, sticky="w", pady=4)
-        tc = ttk.Combobox(pf, textvariable=self.tsel, values=["Авто", "Игрок 2", "Игрок 3", "Игрок 4"],
-                          state="readonly", width=10)
-        tc.grid(row=4, column=2, columnspan=2, sticky="we", pady=4)
-        tc.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+        ctk.CTkLabel(p, text="", height=4).pack()
+        ctk.CTkLabel(p, text="Приоритет цели:", anchor="w").pack(fill="x", pady=(10, 2))
+        ctk.CTkOptionMenu(p, values=["Авто", "Игрок 2", "Игрок 3", "Игрок 4"],
+                          variable=self.tsel, command=lambda _: self.refresh(),
+                          width=180).pack(fill="x", pady=4)
 
-        fr = ttk.LabelFrame(m, text=" Мой инвентарь ", padding=6)
-        fr.grid(row=5, column=0, columnspan=4, sticky="we", pady=4)
+    def _build_items_tab(self):
+        p = self.tab_items
+        grid = ctk.CTkFrame(p, fg_color="transparent")
+        grid.pack(fill="both", expand=True, pady=4)
+        for col in range(2):
+            grid.grid_columnconfigure(col, weight=1)
         for i, n in enumerate(ITEMS):
-            ttk.Label(fr, text=RU[n]).grid(row=i // 2, column=(i % 2) * 2, sticky="w", padx=4, pady=1)
-            ttk.Spinbox(fr, from_=0, to=8, width=4, textvariable=self.items[n],
-                        command=self.refresh).grid(row=i // 2, column=(i % 2) * 2 + 1, pady=1)
-        ttk.Checkbutton(fr, text="Вуду кукла активна", variable=self.voodoo_on,
-                        command=self.refresh).grid(row=7, column=0, columnspan=2, sticky="w", pady=4)
-        ttk.Button(fr, text="Юзнул ВУДУ", command=self.use_voodoo,
-                   width=12).grid(row=7, column=2, columnspan=2, sticky="we", padx=4, pady=4)
+            r, c = i // 2, i % 2
+            cell = ctk.CTkFrame(grid, fg_color="#1f2937", corner_radius=8)
+            cell.grid(row=r, column=c, padx=6, pady=4, sticky="ew")
+            ctk.CTkLabel(cell, text=RU[n], anchor="w").pack(side="left", padx=8, pady=6)
+            self._spin(cell, self.items[n], 0, 8, command=self.refresh, width=46).pack(side="right", padx=6)
 
-        btn_f = ttk.Frame(m)
-        btn_f.grid(row=6, column=0, columnspan=4, sticky="we", pady=6)
-        ttk.Button(btn_f, text="📷 Скан патронов", command=self.read_shells,
-                   width=18).pack(side="left", expand=True, padx=2)
-        ttk.Button(btn_f, text="📷 Скан всего стола", command=self.read_all,
-                   width=18).pack(side="right", expand=True, padx=2)
+        ctk.CTkCheckBox(p, text="Вуду кукла активна", variable=self.voodoo_on,
+                        command=self.refresh).pack(anchor="w", pady=(14, 4))
+        ctk.CTkButton(p, text="Юзнул ВУДУ", command=self.use_voodoo,
+                      fg_color="#7c3aed", height=34).pack(fill="x", pady=4)
 
-        act_f = ttk.Frame(m)
-        act_f.grid(row=7, column=0, columnspan=4, sticky="we")
-        ttk.Button(act_f, text="Вылетел БОЕВОЙ", style="Action.TButton",
-                   command=lambda: self.shot("live")).pack(side="left", expand=True, padx=2, pady=2)
-        ttk.Button(act_f, text="Вылетел ХОЛОСТОЙ",
-                   command=lambda: self.shot("blank")).pack(side="right", expand=True, padx=2, pady=2)
+    def _build_actions_tab(self):
+        p = self.tab_actions
 
-        lp_f = ttk.Frame(m)
-        lp_f.grid(row=8, column=0, columnspan=4, sticky="we")
-        ttk.Button(lp_f, text="🔎 Лупа: Боевой",
-                   command=lambda: self.set_known("live")).pack(side="left", expand=True, padx=2, pady=2)
-        ttk.Button(lp_f, text="🔎 Лупа: Холостой",
-                   command=lambda: self.set_known("blank")).pack(side="right", expand=True, padx=2, pady=2)
+        ctk.CTkLabel(p, text="Выстрел", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(6, 2))
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", pady=4)
+        ctk.CTkButton(row, text="Вылетел БОЕВОЙ", command=lambda: self.shot("live"),
+                      fg_color="#dc2626", hover_color="#b91c1c", height=38).pack(side="left", expand=True, padx=4)
+        ctk.CTkButton(row, text="Вылетел ХОЛОСТОЙ", command=lambda: self.shot("blank"),
+                      fg_color="#374151", hover_color="#4b5563", height=38).pack(side="right", expand=True, padx=4)
 
-        ph = ttk.LabelFrame(m, text=" Бёрнер-телефон ", padding=4)
-        ph.grid(row=9, column=0, columnspan=4, sticky="we", pady=4)
+        ctk.CTkLabel(p, text="Лупа (узнать патрон)", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(14, 2))
+        row2 = ctk.CTkFrame(p, fg_color="transparent")
+        row2.pack(fill="x", pady=4)
+        ctk.CTkButton(row2, text="🔎 Боевой", command=lambda: self.set_known("live"),
+                      height=34).pack(side="left", expand=True, padx=4)
+        ctk.CTkButton(row2, text="🔎 Холостой", command=lambda: self.set_known("blank"),
+                      height=34).pack(side="right", expand=True, padx=4)
 
-        ttk.Label(ph, text="№ патрона:").grid(row=0, column=0, **pad)
-        ttk.Spinbox(ph, from_=1, to=12, width=4, textvariable=self.phone_pos).grid(row=0, column=1, **pad)
-        ttk.Button(ph, text="Боевой", command=lambda: self.set_phone("live"),
-                   width=8).grid(row=0, column=2, **pad)
-        ttk.Button(ph, text="Холостой", command=lambda: self.set_phone("blank"),
-                   width=8).grid(row=0, column=3, **pad)
+        ctk.CTkLabel(p, text="Бёрнер-телефон", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(14, 2))
+        row3 = ctk.CTkFrame(p, fg_color="transparent")
+        row3.pack(fill="x", pady=4)
+        ctk.CTkLabel(row3, text="№ патрона:").pack(side="left")
+        self._spin(row3, self.phone_pos, 1, 12, width=46).pack(side="left", padx=6)
+        ctk.CTkButton(row3, text="Боевой", command=lambda: self.set_phone("live"),
+                      width=100).pack(side="left", padx=6)
+        ctk.CTkButton(row3, text="Холостой", command=lambda: self.set_phone("blank"),
+                      width=100).pack(side="left", padx=6)
 
-        ut_f = ttk.Frame(m)
-        ut_f.grid(row=10, column=0, columnspan=4, sticky="we", pady=4)
-        ttk.Button(ut_f, text="Использовать ИНВЕРТОР",
-                   command=self.invert).pack(side="left", expand=True, padx=2)
-        ttk.Button(ut_f, text="🔄 Сброс раунда",
-                   command=self.reset).pack(side="right", expand=True, padx=2)
+        ctk.CTkLabel(p, text="", height=6).pack()
+        ctk.CTkButton(p, text="Использовать ИНВЕРТОР", command=self.invert,
+                      fg_color="#7c3aed", height=36).pack(fill="x", pady=6)
 
+    # ---------- Калибровка ----------
     def open_cal(self):
-        if self.cal and self.cal.winfo_exists():
+        if self._cal_alive():
             self.cal.lift()
             return
-        w = self.cal = tk.Toplevel(self.root)
+        w = self.cal = ctk.CTkToplevel(self)
         w.title("Калибровка зон")
         w.attributes("-topmost", True)
-        w.configure(background="#1e1e24")
-        pad = dict(padx=6, pady=3)
-        ttk.Label(w, text="Укажите точные зоны для анализа:",
-                  font=("Segoe UI", 10, "bold")).grid(row=0, column=0, columnspan=2, **pad, pady=5)
-        ttk.Button(w, text="Зона отображения патронов",
-                   command=lambda: self.pick_roi("shells")).grid(row=1, column=0, columnspan=2, sticky="we", **pad)
-        ttk.Button(w, text="Моя зона HP",
-                   command=lambda: self.pick_roi("hp_me")).grid(row=2, column=0, sticky="we", **pad)
-        ttk.Button(w, text="Моя зона предметов",
-                   command=lambda: self.pick_roi("items")).grid(row=2, column=1, sticky="we", **pad)
+        w.geometry("520x420")
+
+        ctk.CTkLabel(w, text="Укажите точные зоны для анализа",
+                     font=ctk.CTkFont(size=14, weight="bold")).pack(pady=10)
+
+        btns = [
+            ("Зона отображения патронов", lambda: self.pick_roi("shells")),
+            ("Моя зона HP", lambda: self.pick_roi("hp_me")),
+            ("Моя зона предметов", lambda: self.pick_roi("items")),
+        ]
         for i in range(3):
-            ttk.Button(w, text=f"Игрок {i + 2}: зона HP",
-                       command=lambda idx=i: self.pick_roi("hp_o", idx)).grid(row=3 + i, column=0, sticky="we", **pad)
-            ttk.Button(w, text=f"Игрок {i + 2}: зона предметов",
-                       command=lambda idx=i: self.pick_roi("items_o", idx)).grid(row=3 + i, column=1, sticky="we", **pad)
-        ttk.Button(w, text="⚡ Авто-раскладка HP (Фуллскрин)",
-                   command=self.auto_layout).grid(row=6, column=0, columnspan=2, sticky="we", **pad, pady=5)
-        self.tpl = ttk.Combobox(w, values=[RU[k] for k in ITEMS], state="readonly", width=20)
-        self.tpl.current(0)
-        self.tpl.grid(row=7, column=0, **pad)
-        ttk.Button(w, text="Вырезать паттерн",
-                   command=self.cut_template).grid(row=7, column=1, sticky="we", **pad)
+            btns.append((f"Игрок {i + 2}: зона HP", lambda idx=i: self.pick_roi("hp_o", idx)))
+            btns.append((f"Игрок {i + 2}: зона предметов", lambda idx=i: self.pick_roi("items_o", idx)))
+
+        for text, cmd in btns:
+            ctk.CTkButton(w, text=text, command=cmd, height=30).pack(fill="x", padx=20, pady=3)
+
+        ctk.CTkButton(w, text="⚡ Авто-раскладка HP (Фуллскрин)",
+                      command=self.auto_layout, fg_color="#7c3aed").pack(fill="x", padx=20, pady=(12, 4))
+
+        self.tpl = ctk.CTkOptionMenu(w, values=[RU[k] for k in ITEMS])
+        self.tpl.set(RU[ITEMS[0]])
+        self.tpl.pack(fill="x", padx=20, pady=(10, 4))
+        ctk.CTkButton(w, text="Вырезать паттерн",
+                      command=self.cut_template).pack(fill="x", padx=20, pady=4)
 
     def auto_layout(self):
         mon = vision.get_monitor()
-        W, H = mon[0]["width"], mon[0]["height"]
+        W, H = mon["width"], mon["height"]
 
         def box(x, y, w, h):
-            return [mon[0]["left"] + int(x / 1919 * W), mon[0]["top"] + int(y / 1008 * H),
+            return [mon["left"] + int(x / 1919 * W), mon["top"] + int(y / 1008 * H),
                     int(w / 1919 * W), int(h / 1008 * H)]
 
         cfg["hp_me"] = box(870, 770, 190, 60)
@@ -273,29 +333,32 @@ class App:
         messagebox.showinfo("Успех", "Автоматические координаты для HP выставлены.")
 
     def pick_roi(self, key, idx=None):
-        if self.cal:
-            self.cal.withdraw()
-        r = select_region_ui(self.root)
-        if self.cal:
-            self.cal.deiconify()
-        if r:
-            if idx is None:
-                cfg[key] = list(r[0])
-            else:
-                cfg[key][idx] = list(r[0])
-            save_cfg()
-            messagebox.showinfo("Успех", "Зона успешно обновлена.")
+        self._cal_hide()
+        r = select_region_ui(self)
+        self._cal_show()
+        if not r:
+            return
+        if idx is None:
+            cfg[key] = list(r[0])
+        else:
+            cfg[key][idx] = list(r[0])
+        save_cfg()
+        messagebox.showinfo("Успех", "Зона успешно обновлена.")
 
     def cut_template(self):
-        target_name = [k for k, v in RU.items() if v == self.tpl.get()][0]
-        if self.cal:
-            self.cal.withdraw()
-        r = select_region_ui(self.root)
-        if self.cal:
-            self.cal.deiconify()
+        try:
+            name = self.tpl.get()
+        except Exception:
+            return
+        target_name = next((k for k, v in RU.items() if v == name), None)
+        if not target_name:
+            return
+        self._cal_hide()
+        r = select_region_ui(self)
+        self._cal_show()
         if r:
             cv2.imwrite(os.path.join(vision.TPL_DIR, target_name + ".png"), r[1])
-            messagebox.showinfo("Успех", f"Шаблон для [{self.tpl.get()}] сохранен.")
+            messagebox.showinfo("Успех", f"Шаблон для [{name}] сохранен.")
 
     def new_round_reset(self):
         self.known, self.phone, self.spent = None, {}, 0
@@ -340,11 +403,11 @@ class App:
 
     def tick(self):
         try:
-            if self.auto.get():
+            if self.auto.get() and self.winfo_viewable():
                 self.auto_read()
         except Exception as e:
             self.status.set(f"Ошибка парсинга: {e}")
-        self.root.after(700, self.tick)
+        self.after(700, self.tick)
 
     def auto_read(self):
         changed = False
@@ -363,10 +426,11 @@ class App:
                 else:
                     self.pend_shells = (L, B)
             elif self.track_shells.get():
-                if (L, B) == self.pend_track and (L, B) != self.last_shell and L + B < self.start_total:
+                if ((L, B) == self.pend_track and (L, B) != self.last_shell
+                        and L + B < self.start_total):
                     self.live.set(L)
                     self.blank.set(B)
-                    self.spent = self.start_total - (L + B)
+                    self.spent = max(0, self.start_total - (L + B))
                     self.known = None
                     self.sawed.set(False)
                     self.last_shell = (L, B)
@@ -456,7 +520,7 @@ class App:
                 selected_target = int(self.tsel.get().split()[-1]) - 2
                 if selected_target in active_players:
                     target_idx = selected_target
-            except Exception:
+            except (ValueError, IndexError):
                 pass
         game_state = {
             "live": self.live.get(), "blank": self.blank.get(),
@@ -470,12 +534,11 @@ class App:
             "sawed": self.sawed.get(), "voodoo_on": self.voodoo_on.get(),
             "cur_known": self.known or self.phone.get(self.spent + 1),
             "is_known_direct": self.known is not None,
-            "spent": self.spent
+            "spent": self.spent,
         }
-        self.advice.config(text=strategy.compute_advice(game_state))
+        self.advice.configure(text=strategy.compute_advice(game_state))
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    App(root)
-    root.mainloop()
+    app = App()
+    app.mainloop()
